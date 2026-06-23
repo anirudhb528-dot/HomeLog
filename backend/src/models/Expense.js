@@ -22,6 +22,9 @@ const expenseSchema = new mongoose.Schema(
     date: { type: Date, required: true, default: Date.now },
     // Optional link back to the maintenance task that generated the expense.
     relatedTask: { type: mongoose.Schema.Types.ObjectId, ref: 'MaintenanceTask' },
+    // Optional receipt photo stored in Supabase Storage.
+    receiptUrl: { type: String, trim: true },
+    receiptPath: { type: String, trim: true },
   },
   { timestamps: true }
 );

@@ -42,9 +42,11 @@ const getMe = asyncHandler(async (req, res) => {
 
 /** PATCH /api/auth/me — update name and/or embedded home details. */
 const updateMe = asyncHandler(async (req, res) => {
-  const { name, home } = req.body;
+  const { name, home, avatarUrl, avatarPath } = req.body;
 
   if (typeof name === 'string') req.user.name = name;
+  if (typeof avatarUrl === 'string') req.user.avatarUrl = avatarUrl;
+  if (typeof avatarPath === 'string') req.user.avatarPath = avatarPath;
   if (home && typeof home === 'object') {
     // Merge provided home fields onto the existing sub-document.
     req.user.home = { ...(req.user.home?.toObject?.() ?? req.user.home), ...home };

@@ -19,7 +19,16 @@ const env = {
   jwtExpires: process.env.JWT_EXPIRES || '7d',
   // CORS_ORIGIN is a comma-separated list, or "*" for any origin.
   corsOrigin: (process.env.CORS_ORIGIN || '*').trim(),
+
+  // Supabase Storage (optional) — used for image uploads. When unset, upload
+  // endpoints return 503 and the rest of the app runs normally.
+  supabaseUrl: (process.env.SUPABASE_URL || '').trim(),
+  supabaseServiceKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+  supabaseBucket: (process.env.SUPABASE_BUCKET || 'homelog-uploads').trim(),
 };
+
+// True only when Supabase credentials are present, so storage features activate.
+env.storageEnabled = Boolean(env.supabaseUrl && env.supabaseServiceKey);
 
 env.isProduction = env.nodeEnv === 'production';
 env.isTest = env.nodeEnv === 'test';

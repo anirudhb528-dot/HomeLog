@@ -4,8 +4,18 @@ const mongoose = require('mongoose');
 const Expense = require('../models/Expense');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { parsePagination, buildMeta } = require('../utils/pagination');
 
-const WRITABLE = ['description', 'amount', 'currency', 'category', 'date', 'relatedTask'];
+const WRITABLE = [
+  'description',
+  'amount',
+  'currency',
+  'category',
+  'date',
+  'relatedTask',
+  'receiptUrl',
+  'receiptPath',
+];
 
 function pickWritable(body) {
   const out = {};
@@ -25,8 +35,12 @@ const listExpenses = asyncHandler(async (req, res) => {
     if (req.query.to) filter.date.$lte = new Date(req.query.to);
   }
 
-  const expenses = await Expense.find(filter).sort({ date: -1 });
-  res.json({ expenses });
+  const pg = parsePagination(req.query);
+  const [expenses, total] = await Promise.all([
+    Expense.find(filter).sort({ date: -1 }).skip(pg.skip).limit(pg.limit),
+    Expense.countDocuments(filter),
+  ]);
+  res.json({ expenses, meta: buildMeta(pg, total) });
 });
 
 /** POST /api/expenses — log an expense for the user. */

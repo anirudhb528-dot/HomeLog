@@ -36,6 +36,8 @@ router.patch(
   requireAuth,
   [
     body('name').optional().isString().trim().notEmpty(),
+    body('avatarUrl').optional({ nullable: true }).isString(),
+    body('avatarPath').optional({ nullable: true }).isString(),
     body('home').optional().isObject(),
     body('home.sizeSqFt').optional().isNumeric(),
     body('home.yearBuilt').optional().isNumeric(),

@@ -165,6 +165,35 @@ const openapiSpec = {
     '/services/bookings/mine': {
       get: { tags: ['Services'], summary: 'List my bookings', responses: { 200: { description: 'OK' } } },
     },
+    '/uploads/image': {
+      post: {
+        tags: ['Uploads'],
+        summary: 'Upload an image to Supabase Storage (multipart field "image")',
+        parameters: [
+          {
+            name: 'folder',
+            in: 'query',
+            schema: { type: 'string', enum: ['receipts', 'avatars'] },
+            description: 'Namespaces the stored object.',
+          },
+        ],
+        requestBody: {
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: { image: { type: 'string', format: 'binary' } },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Uploaded — returns { url, path }' },
+          400: { description: 'Invalid/oversized file' },
+          503: { description: 'Storage not configured on the server' },
+        },
+      },
+    },
   },
 };
 
