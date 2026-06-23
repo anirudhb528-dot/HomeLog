@@ -1,0 +1,28 @@
+# CodeRabbit configuration — https://docs.coderabbit.ai/guides/configure-coderabbit
+# Requires the CodeRabbit GitHub app to be installed on this repository.
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!**/package-lock.json"
+    - "!frontend/assets/*.png"
+  path_instructions:
+    - path: "backend/**"
+      instructions: >-
+        Node/Express (CommonJS) REST API. Check that every data route stays scoped to the
+        authenticated user (user: req.user._id), errors go through ApiError + the central
+        error handler, inputs are validated with express-validator, and secrets are read
+        from env (never hardcoded).
+    - path: "frontend/**"
+      instructions: >-
+        Expo React Native (JavaScript). Check that screens handle loading/empty/error
+        states, the Axios client attaches the JWT, and no secrets are committed.
+chat:
+  auto_reply: true
