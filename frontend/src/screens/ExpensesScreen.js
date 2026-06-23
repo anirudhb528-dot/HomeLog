@@ -1,7 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   FlatList,
   StyleSheet,
   Modal,
@@ -12,7 +13,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Card, Button, Field, Pill, Empty } from '../components';
+import { Card, Button, Field, Pill, Empty, PhotoPicker } from '../components';
 import { expensesApi } from '../api/expenses';
 import { errorMessage } from '../api/client';
 import { formatCurrency, formatDate, titleCase } from '../utils/format';
@@ -37,6 +38,16 @@ export default function ExpensesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null); // null = create mode
+
+  const openCreate = () => {
+    setEditingExpense(null);
+    setModalOpen(true);
+  };
+  const openEdit = (expense) => {
+    setEditingExpense(expense);
+    setModalOpen(true);
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -88,9 +99,17 @@ export default function ExpensesScreen() {
         <Pill label={titleCase(item.category)} color={CAT_COLOR[item.category] || colors.primary} />
         <Text style={styles.muted}>{formatDate(item.date)}</Text>
       </View>
-      <Pressable onPress={() => onDelete(item)} hitSlop={8}>
-        <Text style={styles.delete}>Delete</Text>
-      </Pressable>
+      {item.receiptUrl ? (
+        <Image source={{ uri: item.receiptUrl }} style={styles.receiptThumb} resizeMode="cover" />
+      ) : null}
+      <View style={styles.cardActions}>
+        <Pressable onPress={() => openEdit(item)} hitSlop={8}>
+          <Text style={styles.editLink}>Edit</Text>
+        </Pressable>
+        <Pressable onPress={() => onDelete(item)} hitSlop={8}>
+          <Text style={styles.delete}>Delete</Text>
+        </Pressable>
+      </View>
     </Card>
   );
 
@@ -105,7 +124,7 @@ export default function ExpensesScreen() {
         ListHeaderComponent={
           <View>
             <Text style={styles.h1}>Expenses</Text>
-            <Button title="+ Log expense" onPress={() => setModalOpen(true)} style={styles.addBtn} />
+            <Button title="+ Log expense" onPress={openCreate} style={styles.addBtn} />
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             {/* Summary with simple bar breakdown */}
@@ -144,8 +163,9 @@ export default function ExpensesScreen() {
 
       <ExpenseModal
         visible={modalOpen}
+        expense={editingExpense}
         onClose={() => setModalOpen(false)}
-        onCreated={async () => {
+        onSaved={async () => {
           setModalOpen(false);
           await load();
         }}
@@ -154,37 +174,54 @@ export default function ExpensesScreen() {
   );
 }
 
-function ExpenseModal({ visible, onClose, onCreated }) {
+function ExpenseModal({ visible, expense, onClose, onSaved }) {
+  const isEdit = !!expense;
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('maintenance');
+  const [receipt, setReceipt] = useState({ url: null, path: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const reset = () => {
-    setDescription('');
-    setAmount('');
-    setCategory('maintenance');
+  // Prefill when editing / reset when creating, each time the modal opens.
+  useEffect(() => {
+    if (!visible) return;
     setError(null);
-  };
+    if (expense) {
+      setDescription(expense.description || '');
+      setAmount(String(expense.amount ?? ''));
+      setCategory(expense.category || 'maintenance');
+      setReceipt({ url: expense.receiptUrl || null, path: expense.receiptPath || null });
+    } else {
+      setDescription('');
+      setAmount('');
+      setCategory('maintenance');
+      setReceipt({ url: null, path: null });
+    }
+  }, [visible, expense]);
 
   const submit = async () => {
     setError(null);
     const value = parseFloat(amount);
     if (!description.trim()) return setError('Description is required');
     if (Number.isNaN(value) || value < 0) return setError('Enter a valid amount');
+    const payload = {
+      description: description.trim(),
+      amount: value,
+      category,
+      receiptUrl: receipt.url || undefined,
+      receiptPath: receipt.path || undefined,
+    };
     setSaving(true);
     try {
-      await expensesApi.create({
-        description: description.trim(),
-        amount: value,
-        category,
-        date: new Date().toISOString(),
-      });
-      reset();
-      await onCreated();
+      if (isEdit) {
+        await expensesApi.update(expense._id, payload);
+      } else {
+        await expensesApi.create({ ...payload, date: new Date().toISOString() });
+      }
+      await onSaved();
     } catch (e) {
-      setError(errorMessage(e, 'Could not log expense'));
+      setError(errorMessage(e, `Could not ${isEdit ? 'update' : 'log'} expense`));
     } finally {
       setSaving(false);
     }
@@ -195,7 +232,7 @@ function ExpenseModal({ visible, onClose, onCreated }) {
       <View style={styles.modalBackdrop}>
         <View style={styles.modalSheet}>
           <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.modalTitle}>Log an expense</Text>
+            <Text style={styles.modalTitle}>{isEdit ? 'Edit expense' : 'Log an expense'}</Text>
             <Field label="Description" value={description} onChangeText={setDescription} placeholder="e.g. Plumber visit" />
             <Field
               label="Amount (USD)"
@@ -212,8 +249,18 @@ function ExpenseModal({ visible, onClose, onCreated }) {
                 </Pressable>
               ))}
             </ScrollView>
+
+            <Text style={styles.pickerLabel}>Receipt photo (optional)</Text>
+            <PhotoPicker
+              imageUrl={receipt.url}
+              folder="receipts"
+              shape="rect"
+              label="Receipt photo"
+              onUploaded={({ url, path }) => setReceipt({ url, path })}
+            />
+
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button title="Save expense" onPress={submit} loading={saving} style={styles.modalBtn} />
+            <Button title={isEdit ? 'Save changes' : 'Save expense'} onPress={submit} loading={saving} style={styles.modalBtn} />
             <Button title="Cancel" variant="ghost" onPress={onClose} />
           </ScrollView>
         </View>
@@ -242,7 +289,10 @@ const styles = StyleSheet.create({
   amount: { ...typography.body, fontWeight: '700', color: colors.primary },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm },
   muted: { ...typography.muted },
-  delete: { color: colors.danger, fontSize: 13, marginTop: spacing.sm },
+  receiptThumb: { width: '100%', height: 120, borderRadius: radius.md, marginTop: spacing.md },
+  cardActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm },
+  editLink: { color: colors.primary, fontSize: 13, fontWeight: '600' },
+  delete: { color: colors.danger, fontSize: 13 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: colors.bg,

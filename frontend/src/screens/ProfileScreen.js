@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Card, Button, Field, Pill, Empty } from '../components';
+import { Card, Button, Field, Pill, Empty, PhotoPicker } from '../components';
 import { useAuth } from '../context/AuthContext';
 import { servicesApi } from '../api/services';
 import { errorMessage } from '../api/client';
@@ -42,6 +42,15 @@ export default function ProfileScreen() {
 
   const setHomeField = (key) => (val) => setHome((h) => ({ ...h, [key]: val }));
 
+  // Persist the avatar immediately once uploaded so it survives a reload.
+  const onAvatarUploaded = async ({ url, path }) => {
+    try {
+      await updateProfile({ avatarUrl: url, avatarPath: path });
+    } catch (e) {
+      Alert.alert('Error', errorMessage(e, 'Could not save avatar'));
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     setSavedMsg(null);
@@ -71,6 +80,15 @@ export default function ProfileScreen() {
 
       <Card>
         <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.avatarRow}>
+          <PhotoPicker
+            imageUrl={user?.avatarUrl}
+            folder="avatars"
+            shape="circle"
+            label="Photo"
+            onUploaded={onAvatarUploaded}
+          />
+        </View>
         <Field label="Name" value={name} onChangeText={setName} />
         <Field label="Email" value={user?.email || ''} editable={false} />
       </Card>
@@ -118,6 +136,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg },
   h1: { ...typography.h1, marginBottom: spacing.md },
   sectionTitle: { ...typography.h3, marginBottom: spacing.md },
+  avatarRow: { marginBottom: spacing.md },
   success: { color: colors.success, marginBottom: spacing.sm },
   muted: { ...typography.muted, marginTop: spacing.xs },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

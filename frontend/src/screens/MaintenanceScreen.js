@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,16 @@ export default function MaintenanceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null); // null = create mode
+
+  const openCreate = () => {
+    setEditingTask(null);
+    setModalOpen(true);
+  };
+  const openEdit = (task) => {
+    setEditingTask(task);
+    setModalOpen(true);
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -108,6 +118,7 @@ export default function MaintenanceScreen() {
           {!done && (
             <Button title="Complete" variant="secondary" onPress={() => onComplete(item)} style={styles.actionBtn} />
           )}
+          <Button title="Edit" variant="ghost" onPress={() => openEdit(item)} style={styles.actionBtn} />
           <Button title="Delete" variant="ghost" onPress={() => onDelete(item)} style={styles.actionBtn} />
         </View>
       </Card>
@@ -125,7 +136,7 @@ export default function MaintenanceScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.h1}>Maintenance</Text>
-            <Button title="+ Add task" onPress={() => setModalOpen(true)} style={styles.addBtn} />
+            <Button title="+ Add task" onPress={openCreate} style={styles.addBtn} />
             {error ? <Text style={styles.error}>{error}</Text> : null}
           </View>
         }
@@ -134,8 +145,9 @@ export default function MaintenanceScreen() {
 
       <TaskModal
         visible={modalOpen}
+        task={editingTask}
         onClose={() => setModalOpen(false)}
-        onCreated={async () => {
+        onSaved={async () => {
           setModalOpen(false);
           await load();
         }}
@@ -144,8 +156,9 @@ export default function MaintenanceScreen() {
   );
 }
 
-/** Modal form for creating a task. */
-function TaskModal({ visible, onClose, onCreated }) {
+/** Modal form for creating or editing a task. Pass `task` to edit, omit to create. */
+function TaskModal({ visible, task, onClose, onSaved }) {
+  const isEdit = !!task;
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState('general');
@@ -155,15 +168,27 @@ function TaskModal({ visible, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const reset = () => {
-    setTitle('');
-    setNotes('');
-    setCategory('general');
-    setRecurrence('none');
-    setPriority('medium');
-    setDueInDays('7');
+  // Prefill from the task when editing (or reset to defaults when creating)
+  // each time the modal opens.
+  useEffect(() => {
+    if (!visible) return;
     setError(null);
-  };
+    if (task) {
+      setTitle(task.title || '');
+      setNotes(task.notes || '');
+      setCategory(task.category || 'general');
+      setRecurrence(task.recurrence || 'none');
+      setPriority(task.priority || 'medium');
+      setDueInDays(String(Math.max(0, daysUntil(task.dueDate))));
+    } else {
+      setTitle('');
+      setNotes('');
+      setCategory('general');
+      setRecurrence('none');
+      setPriority('medium');
+      setDueInDays('7');
+    }
+  }, [visible, task]);
 
   const submit = async () => {
     setError(null);
@@ -173,20 +198,24 @@ function TaskModal({ visible, onClose, onCreated }) {
     }
     const due = new Date();
     due.setDate(due.getDate() + (parseInt(dueInDays, 10) || 0));
+    const payload = {
+      title: title.trim(),
+      notes: notes.trim(),
+      category,
+      recurrence,
+      priority,
+      dueDate: due.toISOString(),
+    };
     setSaving(true);
     try {
-      await maintenanceApi.create({
-        title: title.trim(),
-        notes: notes.trim(),
-        category,
-        recurrence,
-        priority,
-        dueDate: due.toISOString(),
-      });
-      reset();
-      await onCreated();
+      if (isEdit) {
+        await maintenanceApi.update(task._id, payload);
+      } else {
+        await maintenanceApi.create(payload);
+      }
+      await onSaved();
     } catch (e) {
-      setError(errorMessage(e, 'Could not create task'));
+      setError(errorMessage(e, `Could not ${isEdit ? 'update' : 'create'} task`));
     } finally {
       setSaving(false);
     }
@@ -197,7 +226,7 @@ function TaskModal({ visible, onClose, onCreated }) {
       <View style={styles.modalBackdrop}>
         <View style={styles.modalSheet}>
           <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.modalTitle}>New maintenance task</Text>
+            <Text style={styles.modalTitle}>{isEdit ? 'Edit task' : 'New maintenance task'}</Text>
             <Field label="Title" value={title} onChangeText={setTitle} placeholder="e.g. Replace air filter" />
             <Field
               label="Notes (optional)"
@@ -225,7 +254,7 @@ function TaskModal({ visible, onClose, onCreated }) {
             />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button title="Create task" onPress={submit} loading={saving} style={styles.modalBtn} />
+            <Button title={isEdit ? 'Save changes' : 'Create task'} onPress={submit} loading={saving} style={styles.modalBtn} />
             <Button title="Cancel" variant="ghost" onPress={onClose} />
           </ScrollView>
         </View>
