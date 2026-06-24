@@ -4,6 +4,16 @@
 const PHOTO_PERMISSION =
   'HomeLog needs access to your photos so you can attach receipt and profile images.';
 
+const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL;
+
+// Fail the build if a real binary would ship pointing at localhost or the
+// eas.json placeholder. Local dev/web export still falls back to localhost.
+if (process.env.EAS_BUILD === 'true') {
+  if (!apiBaseUrl || apiBaseUrl.includes('REPLACE-WITH-YOUR-BACKEND')) {
+    throw new Error('Set EXPO_PUBLIC_API_URL to your deployed backend before an EAS build (see eas.json).');
+  }
+}
+
 module.exports = {
   expo: {
     name: 'HomeLog',
@@ -42,7 +52,7 @@ module.exports = {
     plugins: [['expo-image-picker', { photosPermission: PHOTO_PERMISSION }]],
     extra: {
       // Default to localhost for dev; override per build via EXPO_PUBLIC_API_URL.
-      apiBaseUrl: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api',
+      apiBaseUrl: apiBaseUrl || 'http://localhost:5000/api',
     },
   },
 };

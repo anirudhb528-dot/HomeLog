@@ -24,9 +24,9 @@ async function uploadImage(asset, folder = 'misc') {
     form.append('image', { uri: asset.uri, name, type: mimeType });
   }
 
-  const { data } = await client.post(`/uploads/image?folder=${folder}`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  // Let the HTTP client set Content-Type so the multipart boundary is included
+  // (hard-coding it without a boundary breaks multer parsing on web).
+  const { data } = await client.post(`/uploads/image?folder=${folder}`, form);
   return data; // { url, path }
 }
 

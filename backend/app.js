@@ -17,9 +17,10 @@ const openapiSpec = require('./openapi');
 
 const app = express();
 
-// Trust the first proxy (Render/Heroku/etc. load balancer) so req.ip and
-// express-rate-limit see the real client IP from X-Forwarded-For.
-app.set('trust proxy', 1);
+// Trust proxy hops (configurable via TRUST_PROXY) so req.ip and
+// express-rate-limit see the real client IP from X-Forwarded-For. Default 1
+// (single load balancer like Render); avoids trusting spoofable headers.
+app.set('trust proxy', env.trustProxy);
 
 // ── Security & cross-cutting middleware ──────────────────────────────────────
 app.disable('x-powered-by');

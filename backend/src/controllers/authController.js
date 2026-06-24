@@ -8,7 +8,7 @@ const ServiceProvider = require('../models/ServiceProvider');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { signToken } = require('../utils/token');
-const { deleteImage } = require('../services/storageService');
+const { deleteImage, assertOwnedStoragePath } = require('../services/storageService');
 
 /** POST /api/auth/register — create an account and return a JWT. */
 const register = asyncHandler(async (req, res) => {
@@ -51,7 +51,11 @@ const updateMe = asyncHandler(async (req, res) => {
 
   if (typeof name === 'string') req.user.name = name;
   if (avatarUrl !== undefined) req.user.avatarUrl = avatarUrl;
-  if (avatarPath !== undefined) req.user.avatarPath = avatarPath;
+  if (avatarPath !== undefined) {
+    // Only accept a path inside this user's own avatars namespace.
+    assertOwnedStoragePath(avatarPath, req.user._id, 'avatars');
+    req.user.avatarPath = avatarPath;
+  }
   if (home && typeof home === 'object') {
     // Merge provided home fields onto the existing sub-document.
     req.user.home = { ...(req.user.home?.toObject?.() ?? req.user.home), ...home };

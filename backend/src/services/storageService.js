@@ -68,4 +68,25 @@ async function deleteImage(path) {
   await supabase.storage.from(env.supabaseBucket).remove([path]);
 }
 
-module.exports = { uploadImage, deleteImage, validateImage, ALLOWED_MIME, MAX_BYTES };
+/**
+ * Reject a storage path that isn't owned by this user. Uploads are written to
+ * `<folder>/<userId>/...`, so a client-supplied path must carry that prefix —
+ * otherwise a malicious client could point `avatarPath`/`receiptPath` at someone
+ * else's object and have it deleted during cleanup. No-op for empty paths.
+ */
+function assertOwnedStoragePath(path, userId, folder) {
+  if (!path) return;
+  const prefix = `${folder}/${String(userId)}/`;
+  if (typeof path !== 'string' || !path.startsWith(prefix)) {
+    throw ApiError.badRequest('Invalid storage path');
+  }
+}
+
+module.exports = {
+  uploadImage,
+  deleteImage,
+  validateImage,
+  assertOwnedStoragePath,
+  ALLOWED_MIME,
+  MAX_BYTES,
+};

@@ -5,6 +5,7 @@ const Expense = require('../models/Expense');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { parsePagination, buildMeta } = require('../utils/pagination');
+const { assertOwnedStoragePath } = require('../services/storageService');
 
 const WRITABLE = [
   'description',
@@ -37,7 +38,7 @@ const listExpenses = asyncHandler(async (req, res) => {
 
   const pg = parsePagination(req.query);
   const [expenses, total] = await Promise.all([
-    Expense.find(filter).sort({ date: -1 }).skip(pg.skip).limit(pg.limit),
+    Expense.find(filter).sort({ date: -1, _id: -1 }).skip(pg.skip).limit(pg.limit),
     Expense.countDocuments(filter),
   ]);
   res.json({ expenses, meta: buildMeta(pg, total) });
@@ -45,6 +46,8 @@ const listExpenses = asyncHandler(async (req, res) => {
 
 /** POST /api/expenses — log an expense for the user. */
 const createExpense = asyncHandler(async (req, res) => {
+  // A client-supplied receipt path must live in this user's own namespace.
+  assertOwnedStoragePath(req.body.receiptPath, req.user._id, 'receipts');
   const expense = await Expense.create({
     ...pickWritable(req.body),
     user: req.user._id,
@@ -60,6 +63,7 @@ async function findOwnedExpense(userId, id) {
 
 /** PATCH /api/expenses/:id — update an owned expense. */
 const updateExpense = asyncHandler(async (req, res) => {
+  assertOwnedStoragePath(req.body.receiptPath, req.user._id, 'receipts');
   const expense = await findOwnedExpense(req.user._id, req.params.id);
   Object.assign(expense, pickWritable(req.body));
   await expense.save();

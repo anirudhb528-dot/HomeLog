@@ -129,6 +129,20 @@ describe('Integration: HomeLog API (in-memory MongoDB)', function () {
       const maintenance = summary.body.byCategory.find((c) => c.category === 'maintenance');
       expect(maintenance.total).to.equal(150);
     });
+
+    it("rejects a receiptPath outside the user's storage namespace (400)", async () => {
+      const { token } = await registerUser();
+      const res = await request(app)
+        .post('/api/expenses')
+        .set(authHeader(token))
+        .send({
+          description: 'x',
+          amount: 1,
+          category: 'other',
+          receiptPath: 'receipts/someone-else/abc.png',
+        });
+      expect(res.status).to.equal(400);
+    });
   });
 
   describe('Account deletion', () => {

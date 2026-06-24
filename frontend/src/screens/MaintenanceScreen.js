@@ -165,6 +165,9 @@ function TaskModal({ visible, task, onClose, onSaved }) {
   const [recurrence, setRecurrence] = useState('none');
   const [priority, setPriority] = useState('medium');
   const [dueInDays, setDueInDays] = useState('7');
+  // Track whether the user actually edited the due date, so editing other fields
+  // on an overdue/completed task doesn't silently reset its due date to today.
+  const [dueChanged, setDueChanged] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -173,6 +176,7 @@ function TaskModal({ visible, task, onClose, onSaved }) {
   useEffect(() => {
     if (!visible) return;
     setError(null);
+    setDueChanged(false);
     if (task) {
       setTitle(task.title || '');
       setNotes(task.notes || '');
@@ -196,15 +200,22 @@ function TaskModal({ visible, task, onClose, onSaved }) {
       setError('Title is required');
       return;
     }
-    const due = new Date();
-    due.setDate(due.getDate() + (parseInt(dueInDays, 10) || 0));
+    // Keep the original due date when editing unless the user changed it.
+    let dueDate;
+    if (isEdit && !dueChanged) {
+      dueDate = new Date(task.dueDate).toISOString();
+    } else {
+      const due = new Date();
+      due.setDate(due.getDate() + (parseInt(dueInDays, 10) || 0));
+      dueDate = due.toISOString();
+    }
     const payload = {
       title: title.trim(),
       notes: notes.trim(),
       category,
       recurrence,
       priority,
-      dueDate: due.toISOString(),
+      dueDate,
     };
     setSaving(true);
     try {
@@ -236,9 +247,12 @@ function TaskModal({ visible, task, onClose, onSaved }) {
               multiline
             />
             <Field
-              label="Due in (days)"
+              label={isEdit ? 'Due in (days) — change to reschedule' : 'Due in (days)'}
               value={dueInDays}
-              onChangeText={setDueInDays}
+              onChangeText={(v) => {
+                setDueInDays(v);
+                setDueChanged(true);
+              }}
               keyboardType="number-pad"
               placeholder="7"
             />

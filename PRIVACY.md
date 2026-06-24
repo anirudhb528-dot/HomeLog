@@ -42,9 +42,11 @@ hosting) and where required by law. We do not share your data with advertisers.
 
 ## Data retention & deletion
 
-We retain your data while your account is active. You can request deletion of your account and
-associated data by contacting us (see below); we will remove it within a reasonable period,
-subject to legal obligations.
+We retain your data while your account is active. You can **delete your account and all
+associated data at any time from within the app** (Profile → Danger zone → Delete account).
+This immediately and permanently removes your tasks, expenses, bookings, reviews, and uploaded
+images. You may also contact us to request deletion. Removal is subject to any legal retention
+obligations.
 
 ## Security
 

@@ -27,7 +27,7 @@ const listTasks = asyncHandler(async (req, res) => {
 
   const pg = parsePagination(req.query);
   const [tasks, total] = await Promise.all([
-    MaintenanceTask.find(filter).sort({ dueDate: 1 }).skip(pg.skip).limit(pg.limit),
+    MaintenanceTask.find(filter).sort({ dueDate: 1, _id: 1 }).skip(pg.skip).limit(pg.limit),
     MaintenanceTask.countDocuments(filter),
   ]);
   // Backward compatible: same `tasks` array, plus pagination `meta`.

@@ -20,7 +20,7 @@ const listProviders = asyncHandler(async (req, res) => {
   const [providers, total] = await Promise.all([
     ServiceProvider.find(filter)
       .select('-reviews') // keep the list lightweight; reviews load on detail
-      .sort({ avgRating: -1, reviewCount: -1 })
+      .sort({ avgRating: -1, reviewCount: -1, _id: 1 })
       .skip(pg.skip)
       .limit(pg.limit),
     ServiceProvider.countDocuments(filter),

@@ -7,6 +7,7 @@ const { query } = require('express-validator');
 const requireAuth = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const ctrl = require('../controllers/uploadController');
+const ApiError = require('../utils/ApiError');
 const { MAX_BYTES } = require('../services/storageService');
 
 const router = express.Router();
@@ -21,7 +22,8 @@ const upload = multer({
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Unsupported file type. Use JPEG, PNG, or WebP.'));
+      // Return a 400 (not a generic 500) for an unsupported file type.
+      cb(ApiError.badRequest('Unsupported file type. Use JPEG, PNG, or WebP.'));
     }
   },
 });

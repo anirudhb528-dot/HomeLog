@@ -143,7 +143,7 @@ Full, interactive docs live at `/api/docs`. Summary:
 | POST | `/api/services/:id/reviews` | ✓ | Add a rating/review |
 | POST | `/api/services/:id/book` | ✓ | Request a booking |
 | GET | `/api/services/bookings/mine` | ✓ | List my bookings |
-| POST | `/api/uploads/image` | ✓ | Upload an image (`?folder=receipts\|avatars`) → `{ url, path }` |
+| POST | `/api/uploads/image` | ✓ | Upload an image (`?folder=receipts\|avatars\|misc`) → `{ url, path }` |
 | GET | `/api/health` | — | Liveness probe (+ db/storage status) |
 
 All authenticated requests expect `Authorization: Bearer <token>` (the frontend Axios client adds this automatically). Errors use a consistent shape: `{ "error": { "message": "...", "details": [...] } }`. List endpoints accept `?page=` / `?limit=` and return a `meta` object alongside the array.
