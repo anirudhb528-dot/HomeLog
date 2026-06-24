@@ -131,6 +131,49 @@ describe('Integration: HomeLog API (in-memory MongoDB)', function () {
     });
   });
 
+  describe('Account deletion', () => {
+    it('deletes the account and all the user data, leaving other users intact', async () => {
+      const a = await registerUser();
+      const b = await registerUser();
+
+      await request(app)
+        .post('/api/maintenance')
+        .set(authHeader(a.token))
+        .send({ title: 'A task', dueDate: new Date().toISOString() });
+      await request(app)
+        .post('/api/expenses')
+        .set(authHeader(a.token))
+        .send({ description: 'A expense', amount: 10, category: 'other' });
+      await request(app)
+        .post('/api/maintenance')
+        .set(authHeader(b.token))
+        .send({ title: 'B task', dueDate: new Date().toISOString() });
+
+      const del = await request(app).delete('/api/auth/me').set(authHeader(a.token));
+      expect(del.status).to.equal(200);
+      expect(del.body).to.have.property('ok', true);
+
+      // A's token no longer resolves to a user.
+      const me = await request(app).get('/api/auth/me').set(authHeader(a.token));
+      expect(me.status).to.equal(401);
+
+      // A cannot log back in.
+      const relogin = await request(app)
+        .post('/api/auth/login')
+        .send({ email: a.user.email, password: 'password123' });
+      expect(relogin.status).to.equal(401);
+
+      // B's data is untouched.
+      const bList = await request(app).get('/api/maintenance').set(authHeader(b.token));
+      expect(bList.body.tasks).to.have.lengthOf(1);
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app).delete('/api/auth/me');
+      expect(res.status).to.equal(401);
+    });
+  });
+
   describe('Uploads (storage disabled in test env)', () => {
     it('returns 503 when Supabase storage is not configured', async () => {
       const { token } = await registerUser();

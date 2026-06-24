@@ -10,7 +10,8 @@ import { formatDate, titleCase } from '../utils/format';
 import { colors, spacing, typography } from '../theme';
 
 export default function ProfileScreen() {
-  const { user, updateProfile, logout } = useAuth();
+  const { user, updateProfile, logout, deleteAccount } = useAuth();
+  const [deleting, setDeleting] = useState(false);
 
   const [name, setName] = useState(user?.name || '');
   const [home, setHome] = useState({
@@ -41,6 +42,29 @@ export default function ProfileScreen() {
   );
 
   const setHomeField = (key) => (val) => setHome((h) => ({ ...h, [key]: val }));
+
+  const doDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      // Session clears → RootNavigator switches to the auth stack automatically.
+    } catch (e) {
+      setDeleting(false);
+      Alert.alert('Error', errorMessage(e, 'Could not delete your account'));
+    }
+  };
+
+  // Two-step confirmation for an irreversible, destructive action.
+  const onDeleteAccount = () => {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account and all your data — tasks, expenses, bookings, reviews, and photos. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete everything', style: 'destructive', onPress: doDeleteAccount },
+      ]
+    );
+  };
 
   // Persist the avatar immediately once uploaded so it survives a reload.
   const onAvatarUploaded = async ({ url, path }) => {
@@ -126,7 +150,21 @@ export default function ProfileScreen() {
         )}
       </Card>
 
-      <Button title="Log out" variant="danger" onPress={logout} style={styles.logout} />
+      <Button title="Log out" variant="ghost" onPress={logout} style={styles.logout} />
+
+      <Card style={styles.dangerCard}>
+        <Text style={styles.dangerTitle}>Danger zone</Text>
+        <Text style={styles.muted}>
+          Permanently delete your account and all associated data. This cannot be undone.
+        </Text>
+        <Button
+          title="Delete account"
+          variant="danger"
+          onPress={onDeleteAccount}
+          loading={deleting}
+          style={styles.deleteBtn}
+        />
+      </Card>
     </ScrollView>
   );
 }
@@ -142,5 +180,8 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   bookingRow: { paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   bookingName: { ...typography.body, fontWeight: '600' },
-  logout: { marginTop: spacing.sm, marginBottom: spacing.xxl },
+  logout: { marginTop: spacing.sm },
+  dangerCard: { borderColor: colors.danger, marginTop: spacing.lg, marginBottom: spacing.xxl },
+  dangerTitle: { ...typography.h3, color: colors.danger, marginBottom: spacing.xs },
+  deleteBtn: { marginTop: spacing.md },
 });

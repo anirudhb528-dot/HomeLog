@@ -127,6 +127,11 @@ const openapiSpec = {
     '/auth/me': {
       get: { tags: ['Auth'], summary: 'Get my profile', responses: { 200: { description: 'OK' }, 401: { description: 'Unauthorized' } } },
       patch: { tags: ['Auth'], summary: 'Update my profile / home', responses: { 200: { description: 'OK' } } },
+      delete: {
+        tags: ['Auth'],
+        summary: 'Permanently delete my account and all my data',
+        responses: { 200: { description: 'Deleted' }, 401: { description: 'Unauthorized' } },
+      },
     },
     '/maintenance': {
       get: { tags: ['Maintenance'], summary: 'List tasks', responses: { 200: { description: 'OK' } } },
