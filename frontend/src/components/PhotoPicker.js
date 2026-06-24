@@ -33,7 +33,7 @@ export default function PhotoPicker({
         allowsEditing: shape === 'circle',
         aspect: shape === 'circle' ? [1, 1] : undefined,
       });
-      if (result.canceled) return;
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
 
       setUploading(true);
       const data = await uploadsApi.uploadImage(result.assets[0], folder);

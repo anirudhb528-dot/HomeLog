@@ -15,6 +15,9 @@ async function uploadImage(asset, folder = 'misc') {
   const form = new FormData();
   if (Platform.OS === 'web') {
     const res = await fetch(asset.uri);
+    if (!res.ok) {
+      throw new Error(`Failed to load asset for upload: ${res.status} ${res.statusText}`);
+    }
     const blob = await res.blob();
     form.append('image', blob, name);
   } else {

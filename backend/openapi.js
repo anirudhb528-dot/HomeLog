@@ -173,7 +173,8 @@ const openapiSpec = {
           {
             name: 'folder',
             in: 'query',
-            schema: { type: 'string', enum: ['receipts', 'avatars'] },
+            required: true,
+            schema: { type: 'string', enum: ['receipts', 'avatars', 'misc'] },
             description: 'Namespaces the stored object.',
           },
         ],

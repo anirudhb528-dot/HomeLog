@@ -136,9 +136,20 @@ describe('Integration: HomeLog API (in-memory MongoDB)', function () {
       const { token } = await registerUser();
       const res = await request(app)
         .post('/api/uploads/image')
+        .query({ folder: 'receipts' })
         .set(authHeader(token))
         .attach('image', Buffer.from('fake-image-bytes'), { filename: 'r.png', contentType: 'image/png' });
       expect(res.status).to.equal(503);
+    });
+
+    it('rejects a missing/invalid folder with 400', async () => {
+      const { token } = await registerUser();
+      const res = await request(app)
+        .post('/api/uploads/image')
+        .query({ folder: 'not-a-folder' })
+        .set(authHeader(token))
+        .attach('image', Buffer.from('x'), { filename: 'r.png', contentType: 'image/png' });
+      expect(res.status).to.equal(400);
     });
 
     it('requires authentication', async () => {

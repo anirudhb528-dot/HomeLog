@@ -21,6 +21,7 @@ function getClient() {
 }
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_FOLDERS = new Set(['avatars', 'receipts', 'misc']);
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const EXT_BY_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
@@ -41,6 +42,7 @@ function validateImage(file) {
  */
 async function uploadImage({ file, userId, folder = 'misc' }) {
   validateImage(file);
+  if (!ALLOWED_FOLDERS.has(folder)) throw ApiError.badRequest('Invalid upload folder');
   const supabase = getClient();
 
   const ext = EXT_BY_MIME[file.mimetype] || 'bin';
@@ -50,7 +52,10 @@ async function uploadImage({ file, userId, folder = 'misc' }) {
     contentType: file.mimetype,
     upsert: false,
   });
-  if (error) throw new ApiError(502, `Storage upload failed: ${error.message}`);
+  if (error) {
+    console.error('Supabase storage upload error:', error);
+    throw new ApiError(502, 'Storage operation failed');
+  }
 
   const { data } = supabase.storage.from(env.supabaseBucket).getPublicUrl(path);
   return { url: data.publicUrl, path };
