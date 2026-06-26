@@ -34,6 +34,12 @@ function errorHandler(err, req, res, _next) {
     const field = Object.keys(err.keyValue || {})[0] || 'field';
     message = `A record with that ${field} already exists`;
   }
+  // Multer upload errors (e.g. file too large) — treat as bad input.
+  else if (err.name === 'MulterError') {
+    statusCode = 400;
+    message =
+      err.code === 'LIMIT_FILE_SIZE' ? 'Image too large (max 5 MB).' : `Upload error: ${err.message}`;
+  }
 
   if (statusCode >= 500) {
     console.error('[error]', err);

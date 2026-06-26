@@ -4,3 +4,4 @@ export { default as Field } from './Field';
 export { default as Pill } from './Pill';
 export { default as Empty } from './Empty';
 export { default as Screen } from './Screen';
+export { default as PhotoPicker } from './PhotoPicker';

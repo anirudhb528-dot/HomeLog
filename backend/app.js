@@ -4,6 +4,8 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
+const compression = require('compression');
+const mongoSanitize = require('express-mongo-sanitize');
 const rateLimit = require('express-rate-limit');
 const swaggerUi = require('swagger-ui-express');
 
@@ -15,6 +17,11 @@ const openapiSpec = require('./openapi');
 
 const app = express();
 
+// Trust proxy hops (configurable via TRUST_PROXY) so req.ip and
+// express-rate-limit see the real client IP from X-Forwarded-For. Default 1
+// (single load balancer like Render); avoids trusting spoofable headers.
+app.set('trust proxy', env.trustProxy);
+
 // ── Security & cross-cutting middleware ──────────────────────────────────────
 app.disable('x-powered-by');
 app.use(helmet());
@@ -24,8 +31,11 @@ app.use(
     credentials: true,
   })
 );
+app.use(compression()); // gzip responses
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+// Strip keys containing `$`/`.` from req.body/query/params to block NoSQL injection.
+app.use(mongoSanitize());
 
 // Request logging — quiet during tests to keep output clean.
 if (!env.isTest) {

@@ -5,4 +5,5 @@ export const authApi = {
   login: (payload) => client.post('/auth/login', payload).then((r) => r.data),
   me: () => client.get('/auth/me').then((r) => r.data),
   updateMe: (payload) => client.patch('/auth/me', payload).then((r) => r.data),
+  deleteMe: () => client.delete('/auth/me').then((r) => r.data),
 };

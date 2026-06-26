@@ -3,6 +3,7 @@
 const MaintenanceTask = require('../models/MaintenanceTask');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { parsePagination, buildMeta } = require('../utils/pagination');
 
 /** Fields a client is allowed to set/update on a task. */
 const WRITABLE = ['title', 'notes', 'category', 'dueDate', 'recurrence', 'priority', 'status'];
@@ -24,8 +25,13 @@ const listTasks = asyncHandler(async (req, res) => {
     filter.status = 'pending';
   }
 
-  const tasks = await MaintenanceTask.find(filter).sort({ dueDate: 1 });
-  res.json({ tasks });
+  const pg = parsePagination(req.query);
+  const [tasks, total] = await Promise.all([
+    MaintenanceTask.find(filter).sort({ dueDate: 1, _id: 1 }).skip(pg.skip).limit(pg.limit),
+    MaintenanceTask.countDocuments(filter),
+  ]);
+  // Backward compatible: same `tasks` array, plus pagination `meta`.
+  res.json({ tasks, meta: buildMeta(pg, total) });
 });
 
 /** POST /api/maintenance — create a task for the user. */

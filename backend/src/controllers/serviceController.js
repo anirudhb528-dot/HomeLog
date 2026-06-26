@@ -4,6 +4,7 @@ const ServiceProvider = require('../models/ServiceProvider');
 const Booking = require('../models/Booking');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { parsePagination, buildMeta } = require('../utils/pagination');
 
 /** GET /api/services — browse/search providers (public). */
 const listProviders = asyncHandler(async (req, res) => {
@@ -15,10 +16,16 @@ const listProviders = asyncHandler(async (req, res) => {
     filter.$or = [{ name: rx }, { description: rx }];
   }
 
-  const providers = await ServiceProvider.find(filter)
-    .select('-reviews') // keep the list lightweight; reviews load on detail
-    .sort({ avgRating: -1, reviewCount: -1 });
-  res.json({ providers });
+  const pg = parsePagination(req.query);
+  const [providers, total] = await Promise.all([
+    ServiceProvider.find(filter)
+      .select('-reviews') // keep the list lightweight; reviews load on detail
+      .sort({ avgRating: -1, reviewCount: -1, _id: 1 })
+      .skip(pg.skip)
+      .limit(pg.limit),
+    ServiceProvider.countDocuments(filter),
+  ]);
+  res.json({ providers, meta: buildMeta(pg, total) });
 });
 
 /** GET /api/services/:id — provider detail with reviews (public). */

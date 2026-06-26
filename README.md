@@ -4,12 +4,13 @@ A home-management app for homeowners: track maintenance, log expenses, and find 
 
 This first version delivers the core features:
 
-- **Maintenance tracker** — schedule tasks, mark them done, and auto-generate the next occurrence for recurring upkeep.
-- **Expense tracker** — log and categorize home spending with category totals and a monthly trend (MongoDB aggregation).
+- **Maintenance tracker** — schedule tasks, **create/edit/complete/delete**, and auto-generate the next occurrence for recurring upkeep.
+- **Expense tracker** — log/edit/categorize home spending with category totals and a monthly trend (MongoDB aggregation), with optional **receipt photos**.
 - **Local services directory** — search/filter providers by trade, see ratings & reviews, and request bookings.
-- **Accounts, profile & dashboard** tie it together.
+- **Accounts, profile & dashboard** — including an optional **profile avatar**.
+- **Image uploads** — receipt and avatar images stored in **Supabase Storage** (optional; the app runs without it).
 
-Community forum, DIY guides, and the inspiration gallery from the original spec are intentionally left out of v1 and noted under [next steps](#suggested-next-steps).
+Community forum, DIY guides, and the inspiration gallery from the original spec are intentionally left out and noted under [next steps](#suggested-next-steps).
 
 ---
 
@@ -142,9 +143,10 @@ Full, interactive docs live at `/api/docs`. Summary:
 | POST | `/api/services/:id/reviews` | ✓ | Add a rating/review |
 | POST | `/api/services/:id/book` | ✓ | Request a booking |
 | GET | `/api/services/bookings/mine` | ✓ | List my bookings |
-| GET | `/api/health` | — | Liveness probe |
+| POST | `/api/uploads/image` | ✓ | Upload an image (`?folder=receipts\|avatars\|misc`) → `{ url, path }` |
+| GET | `/api/health` | — | Liveness probe (+ db/storage status) |
 
-All authenticated requests expect `Authorization: Bearer <token>` (the frontend Axios client adds this automatically). Errors use a consistent shape: `{ "error": { "message": "...", "details": [...] } }`.
+All authenticated requests expect `Authorization: Bearer <token>` (the frontend Axios client adds this automatically). Errors use a consistent shape: `{ "error": { "message": "...", "details": [...] } }`. List endpoints accept `?page=` / `?limit=` and return a `meta` object alongside the array.
 
 ---
 
@@ -157,31 +159,60 @@ All authenticated requests expect `Authorization: Bearer <token>` (the frontend 
 | 3 | **Data layer** | Mongoose models + indexes (`src/models`), seeding (`npm run seed` / auto-seed for the in-memory dev DB), aggregation for expense summaries. |
 | 4 | **Auth & authz** | JWT + bcrypt; per-user data scoping (`user: req.user._id`); hashes never returned (`select:false` + `toJSON`). |
 | 5 | **API contract** | REST, structured JSON errors, status codes, CORS, **Swagger/OpenAPI** at `/api/docs`. |
-| 6 | **Security** | helmet, rate limiting, input validation & sanitized regex search, secrets via env, least-privilege queries. *(TLS terminates at your host/proxy in prod.)* |
-| 7 | **Testing & quality** | Mocha + Chai + Supertest; ESLint + Prettier. |
+| 6 | **Security** | helmet, rate limiting, **mongo-sanitize** (NoSQL-injection guard), input validation & sanitized regex search, secrets via env, least-privilege queries. *(TLS terminates at your host/proxy in prod.)* |
+| 7 | **Testing & quality** | Mocha + Chai + Supertest — smoke tests **plus integration tests** (in-memory Mongo); ESLint + Prettier. |
 | 8 | **Tooling** | Git, npm, `.gitignore`, documented setup (this README). |
-| 9 | **Build/deploy** | GitHub Actions CI (`.github/workflows`); deploy notes below. EAS for app builds. |
-| 10 | **Observability** | Request logging (morgan) + central error logging; Sentry/Datadog are documented next steps. |
-| 11 | **Supporting** | Booking model ready for payments; push/S3/Redis are next steps. |
+| 9 | **Build/deploy** | GitHub Actions CI (`.github/workflows`); `render.yaml` (backend) + `eas.json` (app builds). See below. |
+| 10 | **Observability** | Request logging (morgan) + central error logging + `/api/health` (db/storage status); Sentry/Datadog are next steps. |
+| 11 | **Supporting** | **Supabase Storage** for image uploads; Booking model ready for payments; push/Redis are next steps. |
 
 ---
 
-## Deployment notes
+## Production: deploy & build
 
-- **Backend** → Render / Railway / Fly.io: set `MONGO_URI`, `JWT_SECRET`, `CORS_ORIGIN`, `NODE_ENV=production`. Start command `npm start`.
-- **Database** → MongoDB Atlas (managed backups available on the cluster).
-- **Frontend** → `npx expo export --platform web` for static web hosting, or **EAS Build** for app-store binaries. Point `extra.apiBaseUrl` at your deployed API.
-- **Environments** → keep separate `.env` values per dev / staging / production.
+### Backend → Render + MongoDB Atlas
+
+A [`render.yaml`](render.yaml) blueprint is included. In Render: **New + → Blueprint → pick this
+repo**. It builds `backend/` and runs `npm start` with a health check at `/api/health`. Set the
+dashboard secrets (`MONGO_URI`, `CORS_ORIGIN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`);
+`JWT_SECRET` is auto-generated. (Any Node host works — Railway/Fly.io/AWS — just set the same env.)
+
+### Image storage → Supabase
+
+1. Create a project at <https://supabase.com>, then **Storage → New bucket** (e.g. `homelog-uploads`; make it public for simple read URLs).
+2. **Settings → API**: copy the project URL and the **service_role** key.
+3. Put them in `backend/.env` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`). Leave them blank to disable uploads (the app still runs; `/api/uploads/image` returns `503`).
+
+### App → EAS test builds
+
+The app uses [`app.config.js`](frontend/app.config.js) (reads `EXPO_PUBLIC_API_URL`, defaults to localhost) and [`eas.json`](frontend/eas.json) build profiles. To produce installable test builds:
+
+```bash
+cd frontend
+npm install -g eas-cli       # once
+eas login                    # your Expo account
+# edit eas.json → set EXPO_PUBLIC_API_URL to your deployed backend
+eas build --profile preview --platform android   # or ios (needs Apple Developer)
+```
+
+`preview` builds are shareable internally (Android `.apk` / iOS TestFlight). Regenerate the
+placeholder icon/splash with `node assets/generate-assets.js` after editing `assets/logo` — and
+replace them with real artwork before a public launch.
+
+### Environments
+
+Keep separate values per dev / staging / production (`.env` for the backend, `EXPO_PUBLIC_API_URL`
+for the app). A [privacy policy template](PRIVACY.md) is included — stores require a hosted policy URL.
 
 ---
 
 ## Suggested next steps
 
-1. **Swap JWT → Firebase Auth** for social logins (see the auth note above).
-2. **Push notifications** for due tasks (Expo Notifications + a scheduled backend job).
-3. **Payments** for bookings (Stripe) — the `Booking` model is ready to extend.
-4. **Observability** — wire Sentry (errors) and a metrics/uptime monitor.
-5. **Harden further** — refresh tokens, pagination, integration tests against a test DB, Docker Compose, Redis caching.
+1. **Push notifications** for due tasks (Expo Notifications + a scheduled backend job).
+2. **Payments** for bookings (Stripe) — the `Booking` model is ready to extend (note Apple's IAP rules).
+3. **Observability** — wire Sentry (errors) and a metrics/uptime monitor.
+4. **Harden further** — refresh tokens, Docker Compose, Redis caching.
+5. **Store submission** — Apple Developer ($99/yr) / Google Play ($25), screenshots, listing copy.
 6. **Remaining spec features** — community forum, DIY guides, inspiration gallery, emergency resources.
 
 ## License

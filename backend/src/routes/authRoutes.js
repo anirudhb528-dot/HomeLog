@@ -36,6 +36,8 @@ router.patch(
   requireAuth,
   [
     body('name').optional().isString().trim().notEmpty(),
+    body('avatarUrl').optional({ nullable: true }).isString(),
+    body('avatarPath').optional({ nullable: true }).isString(),
     body('home').optional().isObject(),
     body('home.sizeSqFt').optional().isNumeric(),
     body('home.yearBuilt').optional().isNumeric(),
@@ -43,5 +45,8 @@ router.patch(
   validate,
   ctrl.updateMe
 );
+
+// Permanently delete the account and all associated data (App Store 5.1.1(v)).
+router.delete('/me', requireAuth, ctrl.deleteMe);
 
 module.exports = router;

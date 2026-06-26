@@ -33,6 +33,9 @@ const userSchema = new mongoose.Schema(
     },
     // Never selected by default so password hashes don't leak into normal reads.
     passwordHash: { type: String, required: true, select: false },
+    // Optional profile photo stored in Supabase Storage.
+    avatarUrl: { type: String, trim: true },
+    avatarPath: { type: String, trim: true },
     home: { type: homeSchema, default: () => ({}) },
   },
   { timestamps: true }

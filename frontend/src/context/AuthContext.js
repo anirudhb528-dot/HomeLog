@@ -93,6 +93,12 @@ export function AuthProvider({ children }) {
     return updated;
   }, []);
 
+  // Permanently delete the account, then clear the local session.
+  const deleteAccount = useCallback(async () => {
+    await authApi.deleteMe();
+    await applySession(null, null);
+  }, [applySession]);
+
   const value = {
     token,
     user,
@@ -102,6 +108,7 @@ export function AuthProvider({ children }) {
     register,
     logout,
     updateProfile,
+    deleteAccount,
     apiBaseUrl: client.defaults.baseURL,
   };
 

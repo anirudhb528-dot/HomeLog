@@ -127,6 +127,11 @@ const openapiSpec = {
     '/auth/me': {
       get: { tags: ['Auth'], summary: 'Get my profile', responses: { 200: { description: 'OK' }, 401: { description: 'Unauthorized' } } },
       patch: { tags: ['Auth'], summary: 'Update my profile / home', responses: { 200: { description: 'OK' } } },
+      delete: {
+        tags: ['Auth'],
+        summary: 'Permanently delete my account and all my data',
+        responses: { 200: { description: 'Deleted' }, 401: { description: 'Unauthorized' } },
+      },
     },
     '/maintenance': {
       get: { tags: ['Maintenance'], summary: 'List tasks', responses: { 200: { description: 'OK' } } },
@@ -164,6 +169,38 @@ const openapiSpec = {
     },
     '/services/bookings/mine': {
       get: { tags: ['Services'], summary: 'List my bookings', responses: { 200: { description: 'OK' } } },
+    },
+    '/uploads/image': {
+      post: {
+        tags: ['Uploads'],
+        summary: 'Upload an image to Supabase Storage (multipart field "image")',
+        parameters: [
+          {
+            name: 'folder',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', enum: ['receipts', 'avatars', 'misc'] },
+            description: 'Namespaces the stored object.',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['image'],
+                properties: { image: { type: 'string', format: 'binary' } },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Uploaded — returns { url, path }' },
+          400: { description: 'Invalid/oversized file' },
+          503: { description: 'Storage not configured on the server' },
+        },
+      },
     },
   },
 };

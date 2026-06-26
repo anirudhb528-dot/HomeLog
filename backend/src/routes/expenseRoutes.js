@@ -26,6 +26,8 @@ router.post(
     body('category').optional().isIn(CATEGORIES),
     body('date').optional().isISO8601(),
     body('currency').optional().isString().isLength({ min: 3, max: 3 }),
+    body('receiptUrl').optional({ nullable: true }).isString(),
+    body('receiptPath').optional({ nullable: true }).isString(),
   ],
   validate,
   ctrl.createExpense
@@ -39,6 +41,8 @@ router.patch(
     body('amount').optional().isFloat({ min: 0 }),
     body('category').optional().isIn(CATEGORIES),
     body('date').optional().isISO8601(),
+    body('receiptUrl').optional({ nullable: true }).isString(),
+    body('receiptPath').optional({ nullable: true }).isString(),
   ],
   validate,
   ctrl.updateExpense

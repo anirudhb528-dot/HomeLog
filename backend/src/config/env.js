@@ -19,7 +19,28 @@ const env = {
   jwtExpires: process.env.JWT_EXPIRES || '7d',
   // CORS_ORIGIN is a comma-separated list, or "*" for any origin.
   corsOrigin: (process.env.CORS_ORIGIN || '*').trim(),
+
+  // Supabase Storage (optional) — used for image uploads. When unset, upload
+  // endpoints return 503 and the rest of the app runs normally.
+  supabaseUrl: (process.env.SUPABASE_URL || '').trim(),
+  supabaseServiceKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+  supabaseBucket: (process.env.SUPABASE_BUCKET || 'homelog-uploads').trim(),
 };
+
+// True only when all Supabase settings are present (incl. a non-empty bucket),
+// so storage features activate and uploads take the proper 503-disabled path.
+env.storageEnabled = Boolean(env.supabaseUrl && env.supabaseServiceKey && env.supabaseBucket);
+
+// How many proxy hops to trust (Express `trust proxy`). Default 1 for a single
+// load balancer (Render/Heroku). Override with TRUST_PROXY: a number, or "false"
+// for no proxy, or an IP/subnet string.
+env.trustProxy = (() => {
+  const v = process.env.TRUST_PROXY;
+  if (v === undefined || v === '') return 1;
+  if (v === 'false') return false;
+  if (/^\d+$/.test(v)) return parseInt(v, 10);
+  return v;
+})();
 
 env.isProduction = env.nodeEnv === 'production';
 env.isTest = env.nodeEnv === 'test';
