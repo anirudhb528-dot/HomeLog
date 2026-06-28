@@ -54,7 +54,7 @@ async function uploadImage({ file, userId, folder = 'misc' }) {
   });
   if (error) {
     console.error('Supabase storage upload error:', error);
-    throw new ApiError(502, 'Storage operation failed');
+    throw new ApiError(502, 'Storage operation failed', { reason: error.message });
   }
 
   const { data } = supabase.storage.from(env.supabaseBucket).getPublicUrl(path);
