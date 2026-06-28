@@ -12,13 +12,13 @@
       "distribution": "internal",
       "ios": { "simulator": false },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-YOUR-BACKEND.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://homelog-api.onrender.com/api"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-YOUR-BACKEND.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://homelog-api.onrender.com/api"
       }
     }
   },
