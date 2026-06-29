@@ -14,3 +14,11 @@ describe('GET /api/health', () => {
     expect(res.body).to.have.property('status', 'ok');
   });
 });
+
+describe('GET /', () => {
+  it('returns a friendly landing payload instead of a 404', async () => {
+    const res = await request(app).get('/');
+    expect(res.status).to.equal(200);
+    expect(res.body).to.have.property('name', 'HomeLog API');
+  });
+});

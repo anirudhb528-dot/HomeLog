@@ -65,6 +65,18 @@ if (!env.isTest) {
 // ── API docs ─────────────────────────────────────────────────────────────────
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec, { customSiteTitle: 'HomeLog API docs' }));
 
+// Friendly landing response at the root (this is an API — real endpoints live
+// under /api). Saves visitors from a bare "route not found" at the base URL.
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'HomeLog API',
+    status: 'ok',
+    message: 'This is the HomeLog backend API. See the docs or health check below.',
+    docs: '/api/docs',
+    health: '/api/health',
+  });
+});
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api', apiRoutes);
 
