@@ -31,6 +31,10 @@ const env = {
 // so storage features activate and uploads take the proper 503-disabled path.
 env.storageEnabled = Boolean(env.supabaseUrl && env.supabaseServiceKey && env.supabaseBucket);
 
+// True when Supabase URL + service key are present — required for the Postgres
+// data layer and auth-token verification (bucket not required for those).
+env.supabaseConfigured = Boolean(env.supabaseUrl && env.supabaseServiceKey);
+
 // How many proxy hops to trust (Express `trust proxy`). Default 1 for a single
 // load balancer (Render/Heroku). Override with TRUST_PROXY: a number, or "false"
 // for no proxy, or an IP/subnet string.
