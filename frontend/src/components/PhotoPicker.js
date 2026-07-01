@@ -28,7 +28,7 @@ export default function PhotoPicker({
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'], // SDK 54: string array replaces MediaTypeOptions
         quality: 0.7,
         allowsEditing: shape === 'circle',
         aspect: shape === 'circle' ? [1, 1] : undefined,
