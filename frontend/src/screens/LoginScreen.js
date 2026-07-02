@@ -8,8 +8,8 @@ import { colors, spacing, typography } from '../theme';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('demo@homelog.app');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -62,7 +62,6 @@ export default function LoginScreen({ navigation }) {
               style={styles.footerBtn}
             />
           </View>
-          <Text style={styles.demo}>Demo: demo@homelog.app / password123</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

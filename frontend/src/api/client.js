@@ -1,24 +1,25 @@
 import axios from 'axios';
 import Constants from 'expo-constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Read the API base URL from app.json -> expo.extra.apiBaseUrl. Falls back to
-// localhost so a fresh checkout still points somewhere sensible.
+import { supabase } from '../lib/supabase';
+
+// Read the API base URL from app config (EXPO_PUBLIC_API_URL at build time).
 const apiBaseUrl =
   Constants.expoConfig?.extra?.apiBaseUrl ||
   Constants.manifest?.extra?.apiBaseUrl ||
   'http://localhost:5000/api';
 
-export const TOKEN_KEY = 'homelog.token';
-
 const client = axios.create({
   baseURL: apiBaseUrl,
-  timeout: 15000,
+  // Generous timeout so a cold Render free-tier instance (first request after
+  // idle can take ~50s to wake) doesn't fail outright.
+  timeout: 60000,
 });
 
-// Attach the JWT to every request automatically.
+// Attach the current Supabase access token (auto-refreshed by supabase-js).
 client.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem(TOKEN_KEY);
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -26,23 +27,18 @@ client.interceptors.request.use(async (config) => {
   return config;
 });
 
-// A hook the AuthContext registers so a 401 anywhere can clear the session.
-let onUnauthorized = null;
-export function setUnauthorizedHandler(fn) {
-  onUnauthorized = fn;
-}
-
+// If the API rejects the token, sign out so the app returns to the login screen.
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
-    if (error.response?.status === 401 && onUnauthorized) {
-      await onUnauthorized();
+    if (error.response?.status === 401) {
+      await supabase.auth.signOut();
     }
     return Promise.reject(error);
   }
 );
 
-/** Pull a human-readable message out of an Axios error for display in the UI. */
+/** Pull a human-readable message out of an Axios/Supabase error for the UI. */
 export function errorMessage(error, fallback = 'Something went wrong') {
   return (
     error?.response?.data?.error?.message ||
