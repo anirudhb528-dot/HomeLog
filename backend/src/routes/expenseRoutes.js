@@ -5,7 +5,7 @@ const { body, param } = require('express-validator');
 const validate = require('../middleware/validate');
 const requireAuth = require('../middleware/auth');
 const ctrl = require('../controllers/expenseController');
-const { CATEGORIES } = require('../models/Expense');
+const { EXPENSE_CATEGORIES: CATEGORIES } = require('../constants');
 
 const router = express.Router();
 
@@ -36,7 +36,7 @@ router.post(
 router.patch(
   '/:id',
   [
-    param('id').isMongoId(),
+    param('id').isUUID(),
     body('description').optional().isString().trim().notEmpty(),
     body('amount').optional().isFloat({ min: 0 }),
     body('category').optional().isIn(CATEGORIES),
@@ -48,6 +48,6 @@ router.patch(
   ctrl.updateExpense
 );
 
-router.delete('/:id', [param('id').isMongoId()], validate, ctrl.deleteExpense);
+router.delete('/:id', [param('id').isUUID()], validate, ctrl.deleteExpense);
 
 module.exports = router;

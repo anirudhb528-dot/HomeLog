@@ -1,115 +1,102 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import client, { TOKEN_KEY, setUnauthorizedHandler } from '../api/client';
+import { supabase } from '../lib/supabase';
 import { authApi } from '../api/auth';
-
-const USER_KEY = 'homelog.user';
 
 const AuthContext = createContext(null);
 
 /**
- * Deliberately thin auth layer: token + user state, plus login/register/logout.
- * Swapping JWT for Firebase later means changing only `login`/`register` here
- * and the token verification on the backend — screens stay untouched.
+ * Auth is handled by Supabase (the app talks to Supabase directly with the
+ * public anon key). We keep the Supabase `session` for gating, and load the
+ * user's `profile` (name/home/avatar) from our Render API. Swapping providers
+ * later means changing only this file.
  */
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // true while hydrating on boot
+  const [session, setSession] = useState(null);
+  const [user, setUser] = useState(null); // backend profile shape
+  const [loading, setLoading] = useState(true);
 
-  // Persist + apply a session, or clear it when passed null.
-  const applySession = useCallback(async (nextToken, nextUser) => {
-    if (nextToken) {
-      await AsyncStorage.setItem(TOKEN_KEY, nextToken);
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify(nextUser));
-    } else {
-      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+  // Load the profile (name/home/avatar) from the API for the signed-in user.
+  const loadProfile = useCallback(async () => {
+    try {
+      const { user: profile } = await authApi.me();
+      setUser(profile);
+    } catch (_e) {
+      // Non-fatal; a 401 will trigger sign-out via the Axios interceptor.
     }
-    setToken(nextToken || null);
-    setUser(nextUser || null);
+  }, []);
+
+  // Restore any saved session on launch, then keep it in sync with Supabase.
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active) return;
+      setSession(data.session);
+      if (data.session) await loadProfile();
+      setLoading(false);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) loadProfile();
+      else setUser(null);
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [loadProfile]);
+
+  const login = useCallback(async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+  }, []);
+
+  const register = useCallback(async (name, email, password) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
+    if (error) throw new Error(error.message);
+    // With email confirmation OFF, a session is returned immediately and the
+    // onAuthStateChange listener logs the user in. If confirmation is ON, no
+    // session comes back — surface that so the UI can tell the user to verify.
+    return { needsConfirmation: !data.session };
   }, []);
 
   const logout = useCallback(async () => {
-    await applySession(null, null);
-  }, [applySession]);
-
-  // Restore a saved session on launch, then refresh the profile if possible.
-  useEffect(() => {
-    (async () => {
-      try {
-        const [savedToken, savedUser] = await Promise.all([
-          AsyncStorage.getItem(TOKEN_KEY),
-          AsyncStorage.getItem(USER_KEY),
-        ]);
-        if (savedToken) {
-          setToken(savedToken);
-          if (savedUser) setUser(JSON.parse(savedUser));
-          // Validate the token and refresh the stored user.
-          try {
-            const { user: fresh } = await authApi.me();
-            setUser(fresh);
-            await AsyncStorage.setItem(USER_KEY, JSON.stringify(fresh));
-          } catch (_e) {
-            // 401 handler (below) will clear the session if the token is bad.
-          }
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
+    await supabase.auth.signOut();
   }, []);
 
-  // Let a 401 from any request clear the session globally.
-  useEffect(() => {
-    setUnauthorizedHandler(async () => {
-      await applySession(null, null);
-    });
-  }, [applySession]);
-
-  const login = useCallback(
-    async (email, password) => {
-      const data = await authApi.login({ email, password });
-      await applySession(data.token, data.user);
-      return data.user;
-    },
-    [applySession]
-  );
-
-  const register = useCallback(
-    async (name, email, password) => {
-      const data = await authApi.register({ name, email, password });
-      await applySession(data.token, data.user);
-      return data.user;
-    },
-    [applySession]
-  );
-
-  // Update profile via the API and keep local/persisted user in sync.
   const updateProfile = useCallback(async (payload) => {
     const { user: updated } = await authApi.updateMe(payload);
     setUser(updated);
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
     return updated;
   }, []);
 
-  // Permanently delete the account, then clear the local session.
   const deleteAccount = useCallback(async () => {
     await authApi.deleteMe();
-    await applySession(null, null);
-  }, [applySession]);
+    await supabase.auth.signOut();
+  }, []);
+
+  const resetPassword = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw new Error(error.message);
+  }, []);
 
   const value = {
-    token,
+    session,
     user,
     loading,
-    isAuthenticated: !!token,
+    isAuthenticated: !!session,
     login,
     register,
     logout,
     updateProfile,
     deleteAccount,
-    apiBaseUrl: client.defaults.baseURL,
+    resetPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

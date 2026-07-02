@@ -53,6 +53,12 @@ module.exports = {
     extra: {
       // Default to localhost for dev; override per build via EXPO_PUBLIC_API_URL.
       apiBaseUrl: apiBaseUrl || 'http://localhost:5000/api',
+      // Supabase project URL + PUBLIC anon key (safe to ship; not a secret).
+      supabaseUrl:
+        process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://hizbflzktnsvybejwjpt.supabase.co',
+      supabaseAnonKey:
+        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpemJmbHprdG5zdnliZWp3anB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMjIyNzYsImV4cCI6MjA5Nzc5ODI3Nn0.rMFZ1h1hK8bsI42iCCGSA_nCIZ5cCweXOzaL0cXsid0',
     },
   },
 };

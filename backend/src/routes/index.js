@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const mongoose = require('mongoose');
 
 const authRoutes = require('./authRoutes');
 const maintenanceRoutes = require('./maintenanceRoutes');
@@ -12,16 +11,13 @@ const env = require('../config/env');
 
 const router = express.Router();
 
-// Maps mongoose connection.readyState codes to readable labels.
-const DB_STATES = ['disconnected', 'connected', 'connecting', 'disconnecting'];
-
 /** Liveness/readiness probe — no auth. Reports DB + storage status. */
 router.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    db: DB_STATES[mongoose.connection.readyState] || 'unknown',
+    db: env.supabaseConfigured ? 'supabase' : 'unconfigured',
     storage: env.storageEnabled ? 'enabled' : 'disabled',
   });
 });

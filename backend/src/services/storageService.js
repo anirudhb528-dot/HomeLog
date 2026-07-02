@@ -1,29 +1,22 @@
 'use strict';
 
 const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
 const env = require('../config/env');
+const { getAdminClient } = require('../config/supabase');
 const ApiError = require('../utils/ApiError');
-
-// Lazily-created Supabase client (only when storage is configured).
-let client = null;
-function getClient() {
-  if (!env.storageEnabled) {
-    // 503: the feature is unavailable until SUPABASE_* env vars are set.
-    throw new ApiError(503, 'Image storage is not configured on the server');
-  }
-  if (!client) {
-    client = createClient(env.supabaseUrl, env.supabaseServiceKey, {
-      auth: { persistSession: false },
-    });
-  }
-  return client;
-}
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_FOLDERS = new Set(['avatars', 'receipts', 'misc']);
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const EXT_BY_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
+/** The Supabase Storage bucket, or throw 503 if storage isn't configured. */
+function storageBucket() {
+  if (!env.storageEnabled) {
+    throw new ApiError(503, 'Image storage is not configured on the server');
+  }
+  return getAdminClient().storage.from(env.supabaseBucket);
+}
 
 /** Throw a 400 if the uploaded file isn't an allowed image within the size cap. */
 function validateImage(file) {
@@ -37,18 +30,18 @@ function validateImage(file) {
 }
 
 /**
- * Upload an image buffer to Supabase Storage under `<folder>/<userId>/<random>.<ext>`
- * and return its public URL + storage path.
+ * Upload an image buffer to `<folder>/<userId>/<random>.<ext>` and return its
+ * public URL + storage path.
  */
 async function uploadImage({ file, userId, folder = 'misc' }) {
   validateImage(file);
   if (!ALLOWED_FOLDERS.has(folder)) throw ApiError.badRequest('Invalid upload folder');
-  const supabase = getClient();
+  const bucket = storageBucket();
 
   const ext = EXT_BY_MIME[file.mimetype] || 'bin';
   const path = `${folder}/${userId}/${crypto.randomUUID()}.${ext}`;
 
-  const { error } = await supabase.storage.from(env.supabaseBucket).upload(path, file.buffer, {
+  const { error } = await bucket.upload(path, file.buffer, {
     contentType: file.mimetype,
     upsert: false,
   });
@@ -57,22 +50,19 @@ async function uploadImage({ file, userId, folder = 'misc' }) {
     throw new ApiError(502, 'Storage operation failed');
   }
 
-  const { data } = supabase.storage.from(env.supabaseBucket).getPublicUrl(path);
+  const { data } = bucket.getPublicUrl(path);
   return { url: data.publicUrl, path };
 }
 
-/** Best-effort delete of a previously uploaded object (ignores missing files). */
+/** Best-effort delete of a previously uploaded object (no-op if storage is off). */
 async function deleteImage(path) {
   if (!path || !env.storageEnabled) return;
-  const supabase = getClient();
-  await supabase.storage.from(env.supabaseBucket).remove([path]);
+  await getAdminClient().storage.from(env.supabaseBucket).remove([path]);
 }
 
 /**
- * Reject a storage path that isn't owned by this user. Uploads are written to
- * `<folder>/<userId>/...`, so a client-supplied path must carry that prefix —
- * otherwise a malicious client could point `avatarPath`/`receiptPath` at someone
- * else's object and have it deleted during cleanup. No-op for empty paths.
+ * Reject a storage path not owned by this user. Uploads are written under
+ * `<folder>/<userId>/...`, so a client-supplied path must carry that prefix.
  */
 function assertOwnedStoragePath(path, userId, folder) {
   if (!path) return;

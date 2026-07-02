@@ -13,7 +13,7 @@ const uploadSingleImage = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('Image file is required');
   const folder = req.query.folder;
 
-  const result = await uploadImage({ file: req.file, userId: req.user._id, folder });
+  const result = await uploadImage({ file: req.file, userId: req.user.id, folder });
   res.status(201).json(result); // { url, path }
 });
 

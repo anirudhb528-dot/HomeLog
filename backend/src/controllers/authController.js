@@ -1,106 +1,85 @@
 'use strict';
 
-const User = require('../models/User');
-const MaintenanceTask = require('../models/MaintenanceTask');
-const Expense = require('../models/Expense');
-const Booking = require('../models/Booking');
-const ServiceProvider = require('../models/ServiceProvider');
+const { getAdminClient } = require('../config/supabase');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { signToken } = require('../utils/token');
 const { deleteImage, assertOwnedStoragePath } = require('../services/storageService');
 
-/** POST /api/auth/register — create an account and return a JWT. */
-const register = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+// Register/login now happen in the app via the Supabase client. The backend
+// owns the profile row (extra user data) and account deletion.
 
-  const existing = await User.findOne({ email: email.toLowerCase() });
-  if (existing) throw ApiError.conflict('That email is already registered');
+/** Combine the Supabase auth user with its profile row into the app's shape. */
+function toUser(authUser, profile) {
+  return {
+    id: authUser.id,
+    email: authUser.email,
+    name: profile?.name || '',
+    avatarUrl: profile?.avatar_url || null,
+    avatarPath: profile?.avatar_path || null,
+    home: profile?.home || {},
+    createdAt: profile?.created_at || null,
+  };
+}
 
-  const user = new User({ name, email });
-  await user.setPassword(password);
-  await user.save();
+async function fetchProfile(userId) {
+  const { data, error } = await getAdminClient()
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw new ApiError(500, 'Failed to load profile');
+  return data;
+}
 
-  const token = signToken(user._id);
-  res.status(201).json({ token, user });
-});
-
-/** POST /api/auth/login — verify credentials and return a JWT. */
-const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-
-  // passwordHash is select:false, so request it explicitly for comparison.
-  const user = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
-  if (!user || !(await user.comparePassword(password))) {
-    throw ApiError.unauthorized('Invalid email or password');
-  }
-
-  const token = signToken(user._id);
-  // Re-fetch without the hash (or rely on toJSON) — toJSON already strips it.
-  res.json({ token, user });
-});
-
-/** GET /api/auth/me — return the authenticated user's profile. */
+/** GET /api/auth/me */
 const getMe = asyncHandler(async (req, res) => {
-  res.json({ user: req.user });
+  const profile = await fetchProfile(req.user.id);
+  res.json({ user: toUser(req.user, profile) });
 });
 
-/** PATCH /api/auth/me — update name and/or embedded home details. */
+/** PATCH /api/auth/me — update name / home / avatar (upsert so a row always exists). */
 const updateMe = asyncHandler(async (req, res) => {
   const { name, home, avatarUrl, avatarPath } = req.body;
+  const patch = { id: req.user.id };
 
-  if (typeof name === 'string') req.user.name = name;
-  if (avatarUrl !== undefined) req.user.avatarUrl = avatarUrl;
+  if (typeof name === 'string') patch.name = name;
+  if (avatarUrl !== undefined) patch.avatar_url = avatarUrl;
   if (avatarPath !== undefined) {
-    // Only accept a path inside this user's own avatars namespace.
-    assertOwnedStoragePath(avatarPath, req.user._id, 'avatars');
-    req.user.avatarPath = avatarPath;
+    if (avatarPath) assertOwnedStoragePath(avatarPath, req.user.id, 'avatars');
+    patch.avatar_path = avatarPath;
   }
   if (home && typeof home === 'object') {
-    // Merge provided home fields onto the existing sub-document.
-    req.user.home = { ...(req.user.home?.toObject?.() ?? req.user.home), ...home };
+    const current = await fetchProfile(req.user.id);
+    patch.home = { ...(current?.home || {}), ...home };
   }
 
-  await req.user.save();
-  res.json({ user: req.user });
+  const { data, error } = await getAdminClient()
+    .from('profiles')
+    .upsert(patch)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new ApiError(500, 'Failed to update profile');
+  res.json({ user: toUser(req.user, data) });
 });
 
 /**
- * DELETE /api/auth/me — permanently delete the account and all of the user's
- * data. Required by App Store Guideline 5.1.1(v) for any app with sign-up.
- * Removes tasks, expenses, bookings, the user's provider reviews (recomputing
- * ratings), and uploaded images (best-effort), then the account itself.
+ * DELETE /api/auth/me — permanently delete the account. Deleting the Supabase
+ * auth user cascades (FK on delete cascade) to profile, tasks, expenses,
+ * bookings, and reviews. Uploaded images are cleaned from storage first.
  */
 const deleteMe = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const admin = getAdminClient();
 
-  // Collect uploaded image paths to remove from storage afterwards.
-  const expenses = await Expense.find({ user: userId }).select('receiptPath');
-  const imagePaths = [req.user.avatarPath, ...expenses.map((e) => e.receiptPath)].filter(Boolean);
-
-  // Remove the user's own records.
-  await Promise.all([
-    MaintenanceTask.deleteMany({ user: userId }),
-    Expense.deleteMany({ user: userId }),
-    Booking.deleteMany({ user: userId }),
+  const [{ data: profile }, { data: expenses }] = await Promise.all([
+    admin.from('profiles').select('avatar_path').eq('id', req.user.id).maybeSingle(),
+    admin.from('expenses').select('receipt_path').eq('user_id', req.user.id),
   ]);
+  const paths = [profile?.avatar_path, ...(expenses || []).map((e) => e.receipt_path)].filter(Boolean);
+  await Promise.allSettled(paths.map((p) => deleteImage(p)));
 
-  // Remove the user's reviews from any providers and recompute their ratings.
-  const providers = await ServiceProvider.find({ 'reviews.user': userId });
-  await Promise.all(
-    providers.map((p) => {
-      p.reviews = p.reviews.filter((r) => !r.user.equals(userId));
-      p.recomputeRating();
-      return p.save();
-    })
-  );
-
-  // Best-effort: delete uploaded images from Supabase (no-op if storage is off).
-  await Promise.allSettled(imagePaths.map((path) => deleteImage(path)));
-
-  await User.deleteOne({ _id: userId });
-
+  const { error } = await admin.auth.admin.deleteUser(req.user.id);
+  if (error) throw new ApiError(500, 'Failed to delete account');
   res.json({ ok: true });
 });
 
-module.exports = { register, login, getMe, updateMe, deleteMe };
+module.exports = { getMe, updateMe, deleteMe };

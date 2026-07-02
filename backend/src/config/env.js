@@ -31,6 +31,10 @@ const env = {
 // so storage features activate and uploads take the proper 503-disabled path.
 env.storageEnabled = Boolean(env.supabaseUrl && env.supabaseServiceKey && env.supabaseBucket);
 
+// True when Supabase URL + service key are present — required for the Postgres
+// data layer and auth-token verification (bucket not required for those).
+env.supabaseConfigured = Boolean(env.supabaseUrl && env.supabaseServiceKey);
+
 // How many proxy hops to trust (Express `trust proxy`). Default 1 for a single
 // load balancer (Render/Heroku). Override with TRUST_PROXY: a number, or "false"
 // for no proxy, or an IP/subnet string.
@@ -54,27 +58,5 @@ env.corsOrigins =
         .map((o) => o.trim())
         .filter(Boolean);
 
-// True when no database URI is configured — the app then falls back to an
-// in-memory MongoDB for zero-setup local development.
-env.useInMemoryDb = !env.mongoUri;
-
-/**
- * Throw if required runtime secrets are missing. Called by server.js, not on
- * import. In development we tolerate a missing MONGO_URI (an in-memory MongoDB
- * is started instead) and a default JWT secret; production requires real values.
- */
-env.assertRuntimeConfig = function assertRuntimeConfig() {
-  if (!env.isProduction) return;
-
-  const missing = [];
-  if (!env.mongoUri) missing.push('MONGO_URI');
-  if (!process.env.JWT_SECRET) missing.push('JWT_SECRET');
-  if (missing.length) {
-    throw new Error(
-      `Missing required environment variable(s) for production: ${missing.join(', ')}. ` +
-        'Set them in the environment or backend/.env.'
-    );
-  }
-};
 
 module.exports = env;

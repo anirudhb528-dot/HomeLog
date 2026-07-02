@@ -1,16 +1,14 @@
 'use strict';
 
-const { verifyToken } = require('../utils/token');
-const User = require('../models/User');
+const { getUserFromToken } = require('../config/supabase');
 const ApiError = require('../utils/ApiError');
 
 /**
- * Require a valid `Authorization: Bearer <token>` header. On success, attaches
- * the authenticated user document to `req.user`. Runs before any DB query that
- * could leak data, so unauthenticated requests are rejected with 401 up front.
+ * Require a valid Supabase access token in `Authorization: Bearer <token>`.
+ * The app signs in with Supabase (public anon key) and sends that token here;
+ * we validate it against Supabase's auth server and attach the user.
  *
- * This layer is intentionally thin and isolated: swapping JWT for Firebase Auth
- * later means changing only how the token is verified and the user resolved.
+ * `req.user` = the Supabase auth user ({ id (uuid), email, ... }).
  */
 async function requireAuth(req, _res, next) {
   try {
@@ -21,19 +19,11 @@ async function requireAuth(req, _res, next) {
       throw ApiError.unauthorized('Missing or malformed Authorization header');
     }
 
-    let payload;
-    try {
-      payload = verifyToken(token);
-    } catch (_err) {
-      throw ApiError.unauthorized('Invalid or expired token');
-    }
-
-    const user = await User.findById(payload.sub);
-    if (!user) {
-      throw ApiError.unauthorized('User no longer exists');
-    }
+    const user = await getUserFromToken(token);
+    if (!user) throw ApiError.unauthorized('Invalid or expired session');
 
     req.user = user;
+    req.userId = user.id;
     next();
   } catch (err) {
     next(err);
