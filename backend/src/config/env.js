@@ -58,27 +58,5 @@ env.corsOrigins =
         .map((o) => o.trim())
         .filter(Boolean);
 
-// True when no database URI is configured — the app then falls back to an
-// in-memory MongoDB for zero-setup local development.
-env.useInMemoryDb = !env.mongoUri;
-
-/**
- * Throw if required runtime secrets are missing. Called by server.js, not on
- * import. In development we tolerate a missing MONGO_URI (an in-memory MongoDB
- * is started instead) and a default JWT secret; production requires real values.
- */
-env.assertRuntimeConfig = function assertRuntimeConfig() {
-  if (!env.isProduction) return;
-
-  const missing = [];
-  if (!env.mongoUri) missing.push('MONGO_URI');
-  if (!process.env.JWT_SECRET) missing.push('JWT_SECRET');
-  if (missing.length) {
-    throw new Error(
-      `Missing required environment variable(s) for production: ${missing.join(', ')}. ` +
-        'Set them in the environment or backend/.env.'
-    );
-  }
-};
 
 module.exports = env;

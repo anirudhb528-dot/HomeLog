@@ -5,7 +5,12 @@ const { body, param } = require('express-validator');
 const validate = require('../middleware/validate');
 const requireAuth = require('../middleware/auth');
 const ctrl = require('../controllers/maintenanceController');
-const { CATEGORIES, RECURRENCES, PRIORITIES, STATUSES } = require('../models/MaintenanceTask');
+const {
+  MAINTENANCE_CATEGORIES: CATEGORIES,
+  RECURRENCES,
+  PRIORITIES,
+  TASK_STATUSES: STATUSES,
+} = require('../constants');
 
 const router = express.Router();
 
@@ -37,7 +42,7 @@ router.post(
 router.patch(
   '/:id',
   [
-    param('id').isMongoId(),
+    param('id').isUUID(),
     body('title').optional().isString().trim().notEmpty().withMessage('Title cannot be empty'),
     body('dueDate').optional().isISO8601().withMessage('dueDate must be a valid date'),
     ...optionalRules,
@@ -46,8 +51,8 @@ router.patch(
   ctrl.updateTask
 );
 
-router.delete('/:id', [param('id').isMongoId()], validate, ctrl.deleteTask);
+router.delete('/:id', [param('id').isUUID()], validate, ctrl.deleteTask);
 
-router.post('/:id/complete', [param('id').isMongoId()], validate, ctrl.completeTask);
+router.post('/:id/complete', [param('id').isUUID()], validate, ctrl.completeTask);
 
 module.exports = router;

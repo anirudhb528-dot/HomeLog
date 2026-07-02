@@ -8,26 +8,8 @@ const ctrl = require('../controllers/authController');
 
 const router = express.Router();
 
-router.post(
-  '/register',
-  [
-    body('name').isString().trim().notEmpty().withMessage('Name is required'),
-    body('email').isEmail().withMessage('A valid email is required').normalizeEmail(),
-    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
-  ],
-  validate,
-  ctrl.register
-);
-
-router.post(
-  '/login',
-  [
-    body('email').isEmail().withMessage('A valid email is required').normalizeEmail(),
-    body('password').notEmpty().withMessage('Password is required'),
-  ],
-  validate,
-  ctrl.login
-);
+// Registration & login happen in the app via the Supabase client. The backend
+// owns the authenticated user's profile and account deletion.
 
 router.get('/me', requireAuth, ctrl.getMe);
 
@@ -35,7 +17,7 @@ router.patch(
   '/me',
   requireAuth,
   [
-    body('name').optional().isString().trim().notEmpty(),
+    body('name').optional().isString().trim(),
     body('avatarUrl').optional({ nullable: true }).isString(),
     body('avatarPath').optional({ nullable: true }).isString(),
     body('home').optional().isObject(),

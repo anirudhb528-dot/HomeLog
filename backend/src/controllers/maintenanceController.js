@@ -1,97 +1,142 @@
 'use strict';
 
-const MaintenanceTask = require('../models/MaintenanceTask');
+const { getAdminClient } = require('../config/supabase');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { parsePagination, buildMeta } = require('../utils/pagination');
+const { taskToApi } = require('../utils/mappers');
+const { RECURRENCE_MONTHS } = require('../constants');
 
-/** Fields a client is allowed to set/update on a task. */
-const WRITABLE = ['title', 'notes', 'category', 'dueDate', 'recurrence', 'priority', 'status'];
-
-function pickWritable(body) {
-  const out = {};
-  for (const key of WRITABLE) {
-    if (body[key] !== undefined) out[key] = body[key];
-  }
-  return out;
+// Map allowed API fields (camelCase) → DB columns (snake_case).
+const WRITABLE = {
+  title: 'title',
+  notes: 'notes',
+  category: 'category',
+  dueDate: 'due_date',
+  recurrence: 'recurrence',
+  priority: 'priority',
+  status: 'status',
+};
+function toRow(body) {
+  const row = {};
+  for (const [k, col] of Object.entries(WRITABLE)) if (body[k] !== undefined) row[col] = body[k];
+  return row;
 }
 
-/** GET /api/maintenance — list the user's tasks (filterable), sorted by due date. */
+/** GET /api/maintenance */
 const listTasks = asyncHandler(async (req, res) => {
-  const filter = { user: req.user._id };
-
-  if (req.query.status) filter.status = req.query.status;
-  if (req.query.upcoming === 'true') {
-    filter.status = 'pending';
-  }
-
   const pg = parsePagination(req.query);
-  const [tasks, total] = await Promise.all([
-    MaintenanceTask.find(filter).sort({ dueDate: 1, _id: 1 }).skip(pg.skip).limit(pg.limit),
-    MaintenanceTask.countDocuments(filter),
-  ]);
-  // Backward compatible: same `tasks` array, plus pagination `meta`.
-  res.json({ tasks, meta: buildMeta(pg, total) });
+  let q = getAdminClient()
+    .from('maintenance_tasks')
+    .select('*', { count: 'exact' })
+    .eq('user_id', req.user.id);
+  if (req.query.status) q = q.eq('status', req.query.status);
+  if (req.query.upcoming === 'true') q = q.eq('status', 'pending');
+  q = q
+    .order('due_date', { ascending: true })
+    .order('id', { ascending: true })
+    .range(pg.skip, pg.skip + pg.limit - 1);
+
+  const { data, count, error } = await q;
+  if (error) throw new ApiError(500, 'Failed to list tasks');
+  res.json({ tasks: data.map(taskToApi), meta: buildMeta(pg, count || 0) });
 });
 
-/** POST /api/maintenance — create a task for the user. */
+/** POST /api/maintenance */
 const createTask = asyncHandler(async (req, res) => {
-  const task = await MaintenanceTask.create({
-    ...pickWritable(req.body),
-    user: req.user._id,
-  });
-  res.status(201).json({ task });
+  const row = { ...toRow(req.body), user_id: req.user.id };
+  const { data, error } = await getAdminClient()
+    .from('maintenance_tasks')
+    .insert(row)
+    .select('*')
+    .single();
+  if (error) throw new ApiError(500, 'Failed to create task');
+  res.status(201).json({ task: taskToApi(data) });
 });
 
-/** Load a task that belongs to the current user, or 404. */
 async function findOwnedTask(userId, id) {
-  const task = await MaintenanceTask.findOne({ _id: id, user: userId });
-  if (!task) throw ApiError.notFound('Task not found');
-  return task;
+  const { data, error } = await getAdminClient()
+    .from('maintenance_tasks')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw new ApiError(500, 'Failed to load task');
+  if (!data) throw ApiError.notFound('Task not found');
+  return data;
 }
 
-/** PATCH /api/maintenance/:id — update an owned task. */
+/** PATCH /api/maintenance/:id */
 const updateTask = asyncHandler(async (req, res) => {
-  const task = await findOwnedTask(req.user._id, req.params.id);
-  Object.assign(task, pickWritable(req.body));
-  await task.save();
-  res.json({ task });
+  await findOwnedTask(req.user.id, req.params.id);
+  const { data, error } = await getAdminClient()
+    .from('maintenance_tasks')
+    .update(toRow(req.body))
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id)
+    .select('*')
+    .single();
+  if (error) throw new ApiError(500, 'Failed to update task');
+  res.json({ task: taskToApi(data) });
 });
 
-/** DELETE /api/maintenance/:id — delete an owned task. */
+/** DELETE /api/maintenance/:id */
 const deleteTask = asyncHandler(async (req, res) => {
-  const task = await findOwnedTask(req.user._id, req.params.id);
-  await task.deleteOne();
+  const task = await findOwnedTask(req.user.id, req.params.id);
+  const { error } = await getAdminClient()
+    .from('maintenance_tasks')
+    .delete()
+    .eq('id', task.id)
+    .eq('user_id', req.user.id);
+  if (error) throw new ApiError(500, 'Failed to delete task');
   res.json({ ok: true, id: req.params.id });
 });
 
-/**
- * POST /api/maintenance/:id/complete — mark an owned task done. If it recurs,
- * auto-create the next occurrence with the advanced due date.
- */
-const completeTask = asyncHandler(async (req, res) => {
-  const task = await findOwnedTask(req.user._id, req.params.id);
+/** Advance a due date by the recurrence interval, or null if non-recurring. */
+function nextDueDate(dueDate, recurrence) {
+  const months = RECURRENCE_MONTHS[recurrence];
+  if (!months) return null;
+  const d = new Date(dueDate);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString();
+}
 
-  task.status = 'done';
-  task.completedAt = new Date();
-  await task.save();
+/** POST /api/maintenance/:id/complete — mark done + spawn next if recurring. */
+const completeTask = asyncHandler(async (req, res) => {
+  const task = await findOwnedTask(req.user.id, req.params.id);
+  const admin = getAdminClient();
+
+  const { data: done, error } = await admin
+    .from('maintenance_tasks')
+    .update({ status: 'done', completed_at: new Date().toISOString() })
+    .eq('id', task.id)
+    .eq('user_id', req.user.id)
+    .select('*')
+    .single();
+  if (error) throw new ApiError(500, 'Failed to complete task');
 
   let nextTask = null;
-  const nextDue = task.computeNextDueDate();
-  if (nextDue) {
-    nextTask = await MaintenanceTask.create({
-      user: req.user._id,
-      title: task.title,
-      notes: task.notes,
-      category: task.category,
-      dueDate: nextDue,
-      recurrence: task.recurrence,
-      priority: task.priority,
-      status: 'pending',
-    });
+  const nd = nextDueDate(task.due_date, task.recurrence);
+  if (nd) {
+    const { data: created, error: e2 } = await admin
+      .from('maintenance_tasks')
+      .insert({
+        user_id: req.user.id,
+        title: task.title,
+        notes: task.notes,
+        category: task.category,
+        due_date: nd,
+        recurrence: task.recurrence,
+        priority: task.priority,
+        status: 'pending',
+      })
+      .select('*')
+      .single();
+    if (e2) throw new ApiError(500, 'Failed to create the next occurrence');
+    nextTask = taskToApi(created);
   }
 
-  res.json({ task, nextTask });
+  res.json({ task: taskToApi(done), nextTask });
 });
 
 module.exports = { listTasks, createTask, updateTask, deleteTask, completeTask };

@@ -14,14 +14,14 @@ router.get('/', ctrl.listProviders);
 // "/bookings/mine" must precede "/:id" so it isn't captured as an id param.
 router.get('/bookings/mine', requireAuth, ctrl.myBookings);
 
-router.get('/:id', [param('id').isMongoId()], validate, ctrl.getProvider);
+router.get('/:id', [param('id').isUUID()], validate, ctrl.getProvider);
 
 // Authenticated: review and book.
 router.post(
   '/:id/reviews',
   requireAuth,
   [
-    param('id').isMongoId(),
+    param('id').isUUID(),
     body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be 1–5'),
     body('comment').optional().isString().trim(),
   ],
@@ -33,7 +33,7 @@ router.post(
   '/:id/book',
   requireAuth,
   [
-    param('id').isMongoId(),
+    param('id').isUUID(),
     body('scheduledFor').optional().isISO8601(),
     body('notes').optional().isString().trim(),
   ],
